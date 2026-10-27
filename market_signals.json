@@ -1,0 +1,30 @@
+{
+  "as_of": "2026-10-27",
+  "market": "Japan",
+  "thesis": "Do not compete with generic AI chat/writing products. Target narrow, repetitive business workflows where users already spend time moving information between documents, spreadsheets and existing tools.",
+  "signals": [
+    {
+      "id": "smb-entry-gap",
+      "observation": "Many small businesses are interested in AI but still do not know where to start; practical entry-point tools and guided workflow automation remain underserved.",
+      "good_shapes": ["workflow diagnostic", "before-after time calculator", "task-specific local browser tool", "guided automation template"],
+      "avoid": ["generic chatbot", "generic prompt collection"]
+    },
+    {
+      "id": "document-data-work",
+      "observation": "Document creation and data processing are repeatedly cited as high-demand efficiency targets.",
+      "good_shapes": ["CSV cleanup", "document consistency checker", "bulk formatter", "structured text extractor", "handoff checker"],
+      "avoid": ["generic summarizer", "generic AI writer"]
+    },
+    {
+      "id": "workflow-integration-gap",
+      "observation": "Companies increasingly want AI connected to actual workflows, not isolated AI usage.",
+      "good_shapes": ["pre-processing tool", "post-processing validator", "workflow handoff generator", "local privacy-first utility"],
+      "avoid": ["standalone AI chat clone"]
+    }
+  ],
+  "source_notes": [
+    "Leach, 中小企業AI導入実態調査2026, 2026-05-18",
+    "日本AI導入支援協会, AIセミナー参加150社のAI活用状況, 2026-10",
+    "ITmedia, AIエージェントを業務プロセスにどう組み込むか, 2026-10-05"
+  ]
+}
