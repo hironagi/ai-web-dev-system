@@ -18,6 +18,7 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.5:9b")
 ROOT = Path(__file__).resolve().parent
 RUNS_DIR = ROOT / "runs"
 GENERATED_DIR = ROOT / "generated"
+MARKET_SIGNALS_PATH = ROOT / "market_signals.json"
 
 
 @dataclass
@@ -61,11 +62,12 @@ def ollama_chat(system: str, user: str, *, json_mode: bool = False) -> str:
     payload: dict[str, Any] = {
         "model": OLLAMA_MODEL,
         "stream": False,
+        "think": False,
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        "options": {"temperature": 0.35},
+        "options": {"temperature": 0.35, "num_ctx": 8192},
     }
     if json_mode:
         payload["format"] = "json"
@@ -91,32 +93,52 @@ def clamp_score(value: Any) -> float:
     return max(0.0, min(10.0, number))
 
 
+def load_market_signals() -> dict[str, Any]:
+    if not MARKET_SIGNALS_PATH.exists():
+        raise RuntimeError(f"市場シグナルが見つかりません: {MARKET_SIGNALS_PATH}")
+    return json.loads(MARKET_SIGNALS_PATH.read_text(encoding="utf-8"))
+
+
 def discover_ideas() -> list[Idea]:
+    signals = load_market_signals()
     system = (
         "あなたは小規模デジタル商品の事業開発責任者です。"
         "一人開発、低サポート、セルフサービス販売、広告・アフィリエイト・低額課金と相性が良い"
-        "ブラウザ完結型ミニツールを選びます。誇大広告、医療・法律・金融助言、ギャンブル、成人向け、"
-        "規制商品、他者の権利侵害、スパム用途は除外してください。"
+        "ブラウザ完結型ミニツールを選びます。"
+        "一般的なAIチャット、汎用要約、汎用文章生成、単純な単位変換や電卓の焼き直しは禁止です。"
+        "必ず特定業種または特定業務の、繰り返し発生する面倒な作業に絞ってください。"
+        "誇大広告、医療・法律・金融助言、ギャンブル、成人向け、規制商品、他者の権利侵害、スパム用途は除外してください。"
     )
-    user = """
-日本語市場を主対象に、1ファイルHTML/CSS/JavaScriptでMVPを作れるミニツール案を8件出してください。
+    user = f"""
+以下は2026-10-27時点で収集した日本市場向けの市場シグナルです。
+{json.dumps(signals, ensure_ascii=False, indent=2)}
+
+このシグナルに明確に紐づく、1ファイルHTML/CSS/JavaScriptでMVPを作れるニッチな業務ミニツール案を8件出してください。
+「誰でも思いつくAIツール」ではなく、既存のExcel・コピペ・目視確認で行われている面倒な作業を狙ってください。
+各案のproblemには、ユーザーが現在どんな手作業をしているかまで具体的に書いてください。
+
 各案は以下のJSON形式のみで返してください。
-{
+{{
   "ideas": [
-    {
+    {{
       "name": "短い名称",
-      "problem": "解決する具体的な問題",
-      "audience": "対象ユーザー",
-      "monetization": ["ads", "affiliate", "one_time"],
+      "problem": "現状の手作業を含む具体的な問題",
+      "audience": "対象ユーザーを業種・職種まで具体化",
+      "monetization": ["one_time", "subscription", "affiliate", "ads"],
       "demand": 0-10,
       "automation": 0-10,
       "monetization_strength": 0-10,
       "low_support": 0-10,
       "build_speed": 0-10
-    }
+    }}
   ]
-}
-採点は楽観的にせず、競争が激しい案はdemandが高くてもmonetization_strengthやlow_supportを下げてください。
+}}
+
+採点ルール:
+- 競争が激しい案は demand が高くても monetization_strength を下げる
+- 個別顧客ごとの設定が多い案は low_support を下げる
+- 既存の無料ツールで十分な案は monetization_strength を大きく下げる
+- 個人情報や機密情報をサーバー送信せず、ブラウザ内処理で価値が出る案を優先する
 """.strip()
 
     raw = ollama_chat(system, user, json_mode=True)
@@ -165,7 +187,7 @@ JSONのみで返してください。
 {{
   "title": "日本語タイトル",
   "slug": "ascii-kebab-case",
-  "value_proposition": "1文",
+  "value_proposition": "誰の何分の作業を何に置き換えるかが分かる1文",
   "inputs": ["入力項目"],
   "outputs": ["出力項目"],
   "monetization": ["広告・アフィリエイト・買い切り等の自然な導線"],
@@ -200,7 +222,7 @@ def build_html(spec: dict[str, Any]) -> str:
 - 日本語UI
 - レスポンシブ対応
 - title、meta description、h1を含める
-- 上部と結果付近に data-monetization-slot 属性を持つ広告/収益化用プレースホルダーを置く
+- 上部と結果付近に data-monetization-slot 属性を持つ収益化用プレースホルダーを置く
 - プレースホルダーはユーザー操作を邪魔しない
 - 免責が必要なテーマなら短い注意書きを置く
 - TODO、ダミー処理、未実装ボタンを残さない
@@ -242,7 +264,7 @@ def run_once() -> int:
     run_dir = RUNS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"[1/4] Ollama ({OLLAMA_MODEL}) で収益候補を生成")
+    print(f"[1/4] Ollama ({OLLAMA_MODEL}) で市場シグナルから収益候補を生成")
     ideas = discover_ideas()
     ranked = sorted(ideas, key=lambda item: item.score, reverse=True)
     write_json(
@@ -284,10 +306,10 @@ def run_once() -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Local-LLM Revenue Agent v0: discover, score, build and QA a static micro-tool."
+        description="Local-LLM Revenue Agent v0: discover, score, build and QA a niche static business tool."
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("once", help="候補生成からMVP生成・QAまでを1回実行")
+    sub.add_parser("once", help="市場シグナルから候補生成、MVP生成、QAまでを1回実行")
     args = parser.parse_args()
 
     if args.command == "once":
